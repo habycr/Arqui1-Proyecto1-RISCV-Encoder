@@ -12,6 +12,7 @@ No es obligatorio usar este esqueleto ni Python: puede implementar su
 propia herramienta desde cero, en el lenguaje que prefiera, siempre que
 respete el mismo contrato (ver especificación, sección "Modo de operación").
 """
+import re
 import sys
 
 SOPORTADAS = ["add", "sub", "and", "or", "addi", "andi",
@@ -29,12 +30,18 @@ R_INSTRUCTIONS = {
     "or":  {"opcode": 0b0110011, "funct3": 0b110, "funct7": 0b0000000},
 }
 
-
-#Tabla de instrucciones I según el manual oficial de RISC-V en 32 bits
-#el funct3 distingue la operación que debe realizar la ALU
+#Tabla de instrucciones aritméticas de formato I según el manual oficial de RISC-V en 32 bits
+#Ambas instrucciones comparten el opcode, pero utilizan un funct3 diferente para indicar la operación
 I_ARITHMETIC_INSTRUCTIONS = {
     "addi": {"opcode": 0b0010011, "funct3": 0b000},
     "andi": {"opcode": 0b0010011, "funct3": 0b111},
+}
+
+#Tabla de instrucciones de carga de formato I según el manual oficial de RISC-V en 32 bits
+#lw carga una palabra de 32 bits y lb carga un byte, por eso utilizan un funct3 diferente
+I_LOAD_INSTRUCTIONS = {
+    "lw": {"opcode": 0b0000011, "funct3": 0b010},
+    "lb": {"opcode": 0b0000011, "funct3": 0b000},
 }
 
 #función para separar la instrucción en mnemónico y operandos, además de limpiar espacios innecesarios
@@ -90,9 +97,19 @@ def _parse_immediate(immediate: str) -> int:
 
     return number
 
+#separa el desplazamiento y el registro base de un operando utilizado para acceder a memoria
+#Ejemplo: "8(x6)" retorna el desplazamiento 8 y el número 6 correspondiente al registro x6
+def _parse_memory_operand(operand: str) -> tuple[int, int]:
+    match = re.fullmatch(r"(.+?)\s*\(\s*(x\d+)\s*\)", operand.strip())
+    if not match:
+        raise ValueError(
+            f"'{operand}' no utiliza la forma desplazamiento(registro)"
+        )
 
-#CODIFICADOR DE R
+    offset = _parse_immediate(match.group(1).strip())
+    base_register = _parse_register(match.group(2))
 
+    return offset, base_register
 
 #función que codifica una instrucción de formato R en una palabra de 32 bits, o sea, extrae lo que da la función _parse_register 
 # y lo acomoda en la posición correcta según el formato R de RISC-V
@@ -119,9 +136,6 @@ def _encode_r(mnemonic: str, operands: list[str]) -> int:
     )
 
     return word #word ya es el entero de 32 bits que representa la instrucción codificada
-
-
-#CODIFICADOR DE I 
 
 #función que codifica una instrucción aritmética de formato I en una palabra de 32 bits
 #Ejemplo: "addi x5, x6, -12" utiliza x5 como rd, x6 como rs1 y -12 como inmediato
@@ -151,6 +165,32 @@ def _encode_i_arithmetic(mnemonic: str, operands: list[str]) -> int:
 
     return word #word es el entero de 32 bits que representa la instrucción de formato I
 
+#función que codifica una carga de formato I utilizando un registro base y un desplazamiento
+#Ejemplo: "lw x5, 8(x6)" carga en x5 el dato ubicado en la dirección formada por x6 + 8
+def _encode_i_load(mnemonic: str, operands: list[str]) -> int:
+    if len(operands) != 2:
+        raise ValueError(
+            f"{mnemonic} utiliza la forma: {mnemonic} rd, desplazamiento(rs1)"
+        )
+
+    rd = _parse_register(operands[0])
+    offset, rs1 = _parse_memory_operand(operands[1])
+    fields = I_LOAD_INSTRUCTIONS[mnemonic]
+
+    #El desplazamiento también es un inmediato de 12 bits. La máscara permite representar
+    #correctamente los desplazamientos negativos mediante complemento a dos
+    offset_bits = offset & 0b111111111111
+
+    word = (
+        (offset_bits << 20)
+        | (rs1 << 15)
+        | (fields["funct3"] << 12)
+        | (rd << 7)
+        | fields["opcode"]
+    )
+
+    return word #word representa la instrucción de carga completa como un entero de 32 bits
+
 
 def encode_instruction(instruction: str) -> int:
     """
@@ -166,8 +206,11 @@ def encode_instruction(instruction: str) -> int:
     if mnemonic in R_INSTRUCTIONS: #aquí es el caso para cuando el mnemónico es de tipo R, entonces llama a la función que codifica la instrucción de formato R
         return _encode_r(mnemonic, operands)
 
-    if mnemonic in I_ARITHMETIC_INSTRUCTIONS: #caso de instrucción de tipo I
+    if mnemonic in I_ARITHMETIC_INSTRUCTIONS: #si el mnemónico es addi o andi, utiliza la codificación del formato I aritmético
         return _encode_i_arithmetic(mnemonic, operands)
+
+    if mnemonic in I_LOAD_INSTRUCTIONS: #si el mnemónico es lw o lb, utiliza el formato I con la sintaxis propia de memoria
+        return _encode_i_load(mnemonic, operands)
 
     # Los demás formatos se incorporarán por etapas. Mantener este error por
     # ahora evita producir una codificación incorrecta de forma silenciosa.
@@ -240,7 +283,7 @@ def explain_instruction(instruction: str, word: int) -> str:
 
         return "\n".join(explanation)
 
-    if mnemonic in I_ARITHMETIC_INSTRUCTIONS:
+    if mnemonic in I_ARITHMETIC_INSTRUCTIONS or mnemonic in I_LOAD_INSTRUCTIONS:
         #En el formato I los 12 bits superiores contienen el inmediato en vez de funct7 y rs2
         immediate_bits = (word >> 20) & 0b111111111111
         rs1 = (word >> 15) & 0b11111
@@ -274,6 +317,27 @@ def explain_instruction(instruction: str, word: int) -> str:
         ]
         separator = "-" * len(table[0])
 
+        if mnemonic in I_LOAD_INSTRUCTIONS:
+            loaded_data = (
+                "una palabra de 32 bits" if mnemonic == "lw"
+                else "un byte con extensión de signo"
+            )
+            field_explanations = [
+                f"- imm[11:0]: desplazamiento de 12 bits respecto a rs1 ({immediate}).",
+                f"- rs1: registro base utilizado para calcular la dirección, x{rs1}.",
+                f"- funct3: indica que {mnemonic} carga {loaded_data} ({funct3:03b}).",
+                f"- rd: registro donde se guarda el dato leído, x{rd}.",
+                f"- opcode: identifica una carga desde memoria ({opcode:07b}).",
+            ]
+        else:
+            field_explanations = [
+                f"- imm[11:0]: valor inmediato de 12 bits ({immediate}).",
+                f"- rs1: registro fuente, x{rs1}.",
+                f"- funct3: identifica la operación aritmética ({funct3:03b}).",
+                f"- rd: registro donde se guarda el resultado, x{rd}.",
+                f"- opcode: identifica una operación con inmediato ({opcode:07b}).",
+            ]
+
         explanation = [
             f"Instrucción: {instruction.strip()}",
             "Formato: I",
@@ -286,12 +350,7 @@ def explain_instruction(instruction: str, word: int) -> str:
             f"BIN: {word:032b}",
             "",
             "Explicación de los campos:",
-            f"- imm[11:0]: valor inmediato de 12 bits ({immediate}).",
-            f"- rs1: registro fuente, x{rs1}.",
-            f"- funct3: identifica la operación aritmética ({funct3:03b}).",
-            f"- rd: registro donde se guarda el resultado, x{rd}.",
-            f"- opcode: identifica una operación con inmediato ({opcode:07b}).",
-        ]
+        ] + field_explanations
 
         return "\n".join(explanation)
 
