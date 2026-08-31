@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Esqueleto del Codificador Educativo de Instrucciones RISC-V.
+Codificador Educativo de Instrucciones RISC-V.
 CE4301 Arquitectura de Computadores I — Proyecto Individual — 2026-II
 
-Este esqueleto ya implementa el contrato de línea de comandos y de salida
-requerido por la especificación. Usted debe completar las dos funciones
-marcadas con TODO; puede modificar el resto del archivo si lo necesita,
-siempre que se preserve el contrato de invocación y la línea "HEX: 0x...".
+Esta versión implementa las doce instrucciones solicitadas y conserva el
+contrato de línea de comandos y de salida requerido por la especificación,
+incluida la línea "HEX: 0x..." para permitir la validación automática.
 
 No es obligatorio usar este esqueleto ni Python: puede implementar su
 propia herramienta desde cero, en el lenguaje que prefiera, siempre que
@@ -49,6 +48,13 @@ I_LOAD_INSTRUCTIONS = {
 S_INSTRUCTIONS = {
     "sw": {"opcode": 0b0100011, "funct3": 0b010},
     "sb": {"opcode": 0b0100011, "funct3": 0b000},
+}
+
+#Tabla de instrucciones de salto condicional de formato B según el manual oficial de RISC-V en 32 bits
+#beq salta si ambos registros son iguales y bne salta si sus valores son diferentes
+B_INSTRUCTIONS = {
+    "beq": {"opcode": 0b1100011, "funct3": 0b000},
+    "bne": {"opcode": 0b1100011, "funct3": 0b001},
 }
 
 #función para separar la instrucción en mnemónico y operandos, además de limpiar espacios innecesarios
@@ -100,6 +106,26 @@ def _parse_immediate(immediate: str) -> int:
     if not -2048 <= number <= 2047:
         raise ValueError(
             f"el inmediato '{immediate}' está fuera del rango -2048 a 2047"
+        )
+
+    return number
+
+#convierte y valida el desplazamiento utilizado por una instrucción de salto condicional
+#Ejemplo: "-4" es válido, pero "3" no lo es porque las direcciones deben estar alineadas a 2 bytes
+def _parse_branch_offset(offset: str) -> int:
+    try:
+        number = int(offset, 0)
+    except ValueError:
+        raise ValueError(f"'{offset}' no es un desplazamiento válido") from None
+
+    if not -4096 <= number <= 4094:
+        raise ValueError(
+            f"el desplazamiento '{offset}' está fuera del rango -4096 a 4094"
+        )
+
+    if number % 2 != 0:
+        raise ValueError(
+            f"el desplazamiento '{offset}' debe ser un número par"
         )
 
     return number
@@ -227,6 +253,40 @@ def _encode_s(mnemonic: str, operands: list[str]) -> int:
 
     return word #word contiene ambas partes del inmediato en sus posiciones correspondientes
 
+#función que codifica una instrucción de salto condicional de formato B
+#Ejemplo: "beq x5, x6, -4" salta 4 bytes hacia atrás si x5 y x6 contienen el mismo valor
+def _encode_b(mnemonic: str, operands: list[str]) -> int:
+    if len(operands) != 3:
+        raise ValueError(
+            f"{mnemonic} utiliza la forma: {mnemonic} rs1, rs2, desplazamiento"
+        )
+
+    rs1 = _parse_register(operands[0])
+    rs2 = _parse_register(operands[1])
+    offset = _parse_branch_offset(operands[2])
+    fields = B_INSTRUCTIONS[mnemonic]
+
+    #El desplazamiento tiene 13 bits, pero el bit 0 no se guarda porque siempre es cero
+    #Los demás bits se reparten en cuatro zonas diferentes de la instrucción
+    immediate_bits = offset & 0b1111111111111
+    immediate_12 = (immediate_bits >> 12) & 0b1
+    immediate_10_5 = (immediate_bits >> 5) & 0b111111
+    immediate_4_1 = (immediate_bits >> 1) & 0b1111
+    immediate_11 = (immediate_bits >> 11) & 0b1
+
+    word = (
+        (immediate_12 << 31)
+        | (immediate_10_5 << 25)
+        | (rs2 << 20)
+        | (rs1 << 15)
+        | (fields["funct3"] << 12)
+        | (immediate_4_1 << 8)
+        | (immediate_11 << 7)
+        | fields["opcode"]
+    )
+
+    return word #word contiene el desplazamiento reorganizado según el formato B
+
 
 def encode_instruction(instruction: str) -> int:
     """
@@ -251,8 +311,11 @@ def encode_instruction(instruction: str) -> int:
     if mnemonic in S_INSTRUCTIONS: #si el mnemónico es sw o sb, utiliza la codificación del formato S
         return _encode_s(mnemonic, operands)
 
-    # Los demás formatos se incorporarán por etapas. Mantener este error por
-    # ahora evita producir una codificación incorrecta de forma silenciosa.
+    if mnemonic in B_INSTRUCTIONS: #si el mnemónico es beq o bne, utiliza la codificación del formato B
+        return _encode_b(mnemonic, operands)
+
+    #Este error solo se alcanzaría si se agrega una instrucción a SOPORTADAS
+    #sin asociarla con su tabla y su función de codificación
     raise NotImplementedError(
         f"la codificación de '{mnemonic}' todavía no está implementada"
     )
@@ -450,6 +513,79 @@ def explain_instruction(instruction: str, word: int) -> str:
             f"- rs1: registro base utilizado para calcular la dirección, x{rs1}.",
             f"- funct3: indica que {mnemonic} almacena {stored_data} ({funct3:03b}).",
             f"- opcode: identifica un almacenamiento en memoria ({opcode:07b}).",
+        ]
+
+        return "\n".join(explanation)
+
+    if mnemonic in B_INSTRUCTIONS:
+        #Se extraen las cuatro partes del desplazamiento y luego se acomodan nuevamente
+        #en el orden imm[12:1] para recuperar el valor original utilizado por el salto
+        immediate_12 = (word >> 31) & 0b1
+        immediate_10_5 = (word >> 25) & 0b111111
+        rs2 = (word >> 20) & 0b11111
+        rs1 = (word >> 15) & 0b11111
+        funct3 = (word >> 12) & 0b111
+        immediate_4_1 = (word >> 8) & 0b1111
+        immediate_11 = (word >> 7) & 0b1
+        opcode = word & 0b1111111
+
+        immediate_bits = (
+            (immediate_12 << 12)
+            | (immediate_11 << 11)
+            | (immediate_10_5 << 5)
+            | (immediate_4_1 << 1)
+        )
+        immediate = immediate_bits
+        if immediate_bits & 0b1000000000000:
+            immediate -= 1 << 13
+
+        ranges = ["31", "30-25", "24-20", "19-15", "14-12", "11-8", "7", "6-0"]
+        names = [
+            "imm[12]", "imm[10:5]", "rs2", "rs1",
+            "funct3", "imm[4:1]", "imm[11]", "opcode",
+        ]
+        values = [
+            f"{immediate_12:01b}",
+            f"{immediate_10_5:06b}",
+            f"{rs2:05b}",
+            f"{rs1:05b}",
+            f"{funct3:03b}",
+            f"{immediate_4_1:04b}",
+            f"{immediate_11:01b}",
+            f"{opcode:07b}",
+        ]
+
+        def table_row_b(label: str, cells: list[str]) -> str:
+            return f"{label:<7} | " + " | ".join(f"{cell:^10}" for cell in cells)
+
+        table = [
+            table_row_b("Bits", ranges),
+            table_row_b("Campo", names),
+            table_row_b("Valor", values),
+        ]
+        separator = "-" * len(table[0])
+
+        condition = (
+            "son iguales" if mnemonic == "beq"
+            else "son diferentes"
+        )
+        explanation = [
+            f"Instrucción: {instruction.strip()}",
+            "Formato: B",
+            "",
+            table[0],
+            separator,
+            table[1],
+            table[2],
+            "",
+            f"BIN: {word:032b}",
+            "",
+            "Explicación de los campos:",
+            f"- inmediato: sus cuatro partes forman el desplazamiento del salto ({immediate}).",
+            "- imm[0]: no se almacena porque siempre vale 0.",
+            f"- rs1 y rs2: registros que se comparan, x{rs1} y x{rs2}.",
+            f"- funct3: el salto ocurre si los registros {condition} ({funct3:03b}).",
+            f"- opcode: identifica una instrucción de salto condicional ({opcode:07b}).",
         ]
 
         return "\n".join(explanation)
