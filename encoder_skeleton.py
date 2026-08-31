@@ -29,6 +29,14 @@ R_INSTRUCTIONS = {
     "or":  {"opcode": 0b0110011, "funct3": 0b110, "funct7": 0b0000000},
 }
 
+
+#Tabla de instrucciones I según el manual oficial de RISC-V en 32 bits
+#el funct3 distingue la operación que debe realizar la ALU
+I_ARITHMETIC_INSTRUCTIONS = {
+    "addi": {"opcode": 0b0010011, "funct3": 0b000},
+    "andi": {"opcode": 0b0010011, "funct3": 0b111},
+}
+
 #función para separar la instrucción en mnemónico y operandos, además de limpiar espacios innecesarios
 
 #Ejemplo: Entra la instrucción "add x5, x6, x7" y retorna ("add", ["x5", "x6", "x7"])
@@ -67,6 +75,25 @@ def _parse_register(register: str) -> int:
 
     return number
 
+#convierte el inmediato escrito en la instrucción a un número entero y verifica que quepa en 12 bits con signo
+#Ejemplo: "-12" se convierte a -12 y debe estar dentro del rango de -2048 a 2047
+def _parse_immediate(immediate: str) -> int:
+    try:
+        number = int(immediate, 0) #convierte valores decimales y también permite escribir prefijos como 0x para hexadecimal
+    except ValueError:
+        raise ValueError(f"'{immediate}' no es un inmediato válido") from None
+
+    if not -2048 <= number <= 2047:
+        raise ValueError(
+            f"el inmediato '{immediate}' está fuera del rango -2048 a 2047"
+        )
+
+    return number
+
+
+#CODIFICADOR DE R
+
+
 #función que codifica una instrucción de formato R en una palabra de 32 bits, o sea, extrae lo que da la función _parse_register 
 # y lo acomoda en la posición correcta según el formato R de RISC-V
 
@@ -94,6 +121,37 @@ def _encode_r(mnemonic: str, operands: list[str]) -> int:
     return word #word ya es el entero de 32 bits que representa la instrucción codificada
 
 
+#CODIFICADOR DE I 
+
+#función que codifica una instrucción aritmética de formato I en una palabra de 32 bits
+#Ejemplo: "addi x5, x6, -12" utiliza x5 como rd, x6 como rs1 y -12 como inmediato
+def _encode_i_arithmetic(mnemonic: str, operands: list[str]) -> int:
+    if len(operands) != 3:
+        raise ValueError(
+            f"{mnemonic} utiliza la forma: {mnemonic} rd, rs1, inmediato"
+        )
+
+    rd = _parse_register(operands[0])
+    rs1 = _parse_register(operands[1])
+    immediate = _parse_immediate(operands[2])
+    fields = I_ARITHMETIC_INSTRUCTIONS[mnemonic]
+
+    #La máscara conserva únicamente los 12 bits del inmediato. Cuando el valor es negativo,
+    #esto produce automáticamente su representación en complemento a dos
+    immediate_bits = immediate & 0b111111111111
+
+    #El inmediato ocupa los bits 31-20 y reemplaza los campos funct7 y rs2 que tenía el formato R
+    word = (
+        (immediate_bits << 20)
+        | (rs1 << 15)
+        | (fields["funct3"] << 12)
+        | (rd << 7)
+        | fields["opcode"]
+    )
+
+    return word #word es el entero de 32 bits que representa la instrucción de formato I
+
+
 def encode_instruction(instruction: str) -> int:
     """
     Recibe una instrucción como texto, p. ej. "add x5, x6, x7", y debe retornar su codificación de 32 bits como entero (0 <= valor < 2**32).
@@ -107,6 +165,9 @@ def encode_instruction(instruction: str) -> int:
 
     if mnemonic in R_INSTRUCTIONS: #aquí es el caso para cuando el mnemónico es de tipo R, entonces llama a la función que codifica la instrucción de formato R
         return _encode_r(mnemonic, operands)
+
+    if mnemonic in I_ARITHMETIC_INSTRUCTIONS: #caso de instrucción de tipo I
+        return _encode_i_arithmetic(mnemonic, operands)
 
     # Los demás formatos se incorporarán por etapas. Mantener este error por
     # ahora evita producir una codificación incorrecta de forma silenciosa.
@@ -125,63 +186,118 @@ def explain_instruction(instruction: str, word: int) -> str:
     criterio, siempre que sea claro.
     """
     mnemonic, _ = _split_instruction(instruction)
-    if mnemonic not in R_INSTRUCTIONS:
-        raise NotImplementedError(
-            f"la explicación de '{mnemonic}' todavía no está implementada"
-        )
 
-    # Se extraen los campos directamente de la palabra codificada. Las
-    # máscaras conservan únicamente la cantidad de bits que pertenece a cada
-    # campo, igual que al separar la instrucción manualmente.
-    funct7 = (word >> 25) & 0b1111111
-    rs2 = (word >> 20) & 0b11111
-    rs1 = (word >> 15) & 0b11111
-    funct3 = (word >> 12) & 0b111
-    rd = (word >> 7) & 0b11111
-    opcode = word & 0b1111111
+    if mnemonic in R_INSTRUCTIONS:
+        #Se extraen los campos directamente de la palabra codificada. Las máscaras conservan
+        #únicamente la cantidad de bits que pertenece a cada campo del formato R
+        funct7 = (word >> 25) & 0b1111111
+        rs2 = (word >> 20) & 0b11111
+        rs1 = (word >> 15) & 0b11111
+        funct3 = (word >> 12) & 0b111
+        rd = (word >> 7) & 0b11111
+        opcode = word & 0b1111111
 
-    ranges = ["31-25", "24-20", "19-15", "14-12", "11-7", "6-0"]
-    names = ["funct7", "rs2", "rs1", "funct3", "rd", "opcode"]
-    values = [
-        f"{funct7:07b}",
-        f"{rs2:05b}",
-        f"{rs1:05b}",
-        f"{funct3:03b}",
-        f"{rd:05b}",
-        f"{opcode:07b}",
-    ]
+        ranges = ["31-25", "24-20", "19-15", "14-12", "11-7", "6-0"]
+        names = ["funct7", "rs2", "rs1", "funct3", "rd", "opcode"]
+        values = [
+            f"{funct7:07b}",
+            f"{rs2:05b}",
+            f"{rs1:05b}",
+            f"{funct3:03b}",
+            f"{rd:05b}",
+            f"{opcode:07b}",
+        ]
 
-    def table_row(label: str, cells: list[str]) -> str:
-        return f"{label:<7} | " + " | ".join(f"{cell:^8}" for cell in cells)
+        def table_row_r(label: str, cells: list[str]) -> str:
+            return f"{label:<7} | " + " | ".join(f"{cell:^8}" for cell in cells)
 
-    table = [
-        table_row("Bits", ranges),
-        table_row("Campo", names),
-        table_row("Valor", values),
-    ]
-    separator = "-" * len(table[0])
+        table = [
+            table_row_r("Bits", ranges),
+            table_row_r("Campo", names),
+            table_row_r("Valor", values),
+        ]
+        separator = "-" * len(table[0])
 
-    explanation = [
-        f"Instrucción: {instruction.strip()}",
-        "Formato: R",
-        "",
-        table[0],
-        separator,
-        table[1],
-        table[2],
-        "",
-        f"BIN: {word:032b}",
-        "",
-        "Explicación de los campos:",
-        f"- funct7: completa la selección de la operación ({funct7:07b}).",
-        f"- rs2: segundo registro fuente, x{rs2}.",
-        f"- rs1: primer registro fuente, x{rs1}.",
-        f"- funct3: selección principal de la operación ({funct3:03b}).",
-        f"- rd: registro donde se guarda el resultado, x{rd}.",
-        f"- opcode: identifica una operación entre registros ({opcode:07b}).",
-    ]
+        explanation = [
+            f"Instrucción: {instruction.strip()}",
+            "Formato: R",
+            "",
+            table[0],
+            separator,
+            table[1],
+            table[2],
+            "",
+            f"BIN: {word:032b}",
+            "",
+            "Explicación de los campos:",
+            f"- funct7: completa la selección de la operación ({funct7:07b}).",
+            f"- rs2: segundo registro fuente, x{rs2}.",
+            f"- rs1: primer registro fuente, x{rs1}.",
+            f"- funct3: selección principal de la operación ({funct3:03b}).",
+            f"- rd: registro donde se guarda el resultado, x{rd}.",
+            f"- opcode: identifica una operación entre registros ({opcode:07b}).",
+        ]
 
-    return "\n".join(explanation)
+        return "\n".join(explanation)
+
+    if mnemonic in I_ARITHMETIC_INSTRUCTIONS:
+        #En el formato I los 12 bits superiores contienen el inmediato en vez de funct7 y rs2
+        immediate_bits = (word >> 20) & 0b111111111111
+        rs1 = (word >> 15) & 0b11111
+        funct3 = (word >> 12) & 0b111
+        rd = (word >> 7) & 0b11111
+        opcode = word & 0b1111111
+
+        #Si el bit más significativo del inmediato es 1, se resta 2^12 para recuperar
+        #el valor negativo que fue representado en complemento a dos
+        immediate = immediate_bits
+        if immediate_bits & 0b100000000000:
+            immediate -= 1 << 12
+
+        ranges = ["31-20", "19-15", "14-12", "11-7", "6-0"]
+        names = ["imm[11:0]", "rs1", "funct3", "rd", "opcode"]
+        values = [
+            f"{immediate_bits:012b}",
+            f"{rs1:05b}",
+            f"{funct3:03b}",
+            f"{rd:05b}",
+            f"{opcode:07b}",
+        ]
+
+        def table_row_i(label: str, cells: list[str]) -> str:
+            return f"{label:<7} | " + " | ".join(f"{cell:^12}" for cell in cells)
+
+        table = [
+            table_row_i("Bits", ranges),
+            table_row_i("Campo", names),
+            table_row_i("Valor", values),
+        ]
+        separator = "-" * len(table[0])
+
+        explanation = [
+            f"Instrucción: {instruction.strip()}",
+            "Formato: I",
+            "",
+            table[0],
+            separator,
+            table[1],
+            table[2],
+            "",
+            f"BIN: {word:032b}",
+            "",
+            "Explicación de los campos:",
+            f"- imm[11:0]: valor inmediato de 12 bits ({immediate}).",
+            f"- rs1: registro fuente, x{rs1}.",
+            f"- funct3: identifica la operación aritmética ({funct3:03b}).",
+            f"- rd: registro donde se guarda el resultado, x{rd}.",
+            f"- opcode: identifica una operación con inmediato ({opcode:07b}).",
+        ]
+
+        return "\n".join(explanation)
+
+    raise NotImplementedError(
+        f"la explicación de '{mnemonic}' todavía no está implementada"
+    )
 
 
 def main():
