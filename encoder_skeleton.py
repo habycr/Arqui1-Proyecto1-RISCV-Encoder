@@ -44,6 +44,13 @@ I_LOAD_INSTRUCTIONS = {
     "lb": {"opcode": 0b0000011, "funct3": 0b000},
 }
 
+#Tabla de instrucciones de almacenamiento de formato S según el manual oficial de RISC-V en 32 bits
+#sw guarda una palabra de 32 bits y sb guarda únicamente un byte, por eso utilizan un funct3 diferente
+S_INSTRUCTIONS = {
+    "sw": {"opcode": 0b0100011, "funct3": 0b010},
+    "sb": {"opcode": 0b0100011, "funct3": 0b000},
+}
+
 #función para separar la instrucción en mnemónico y operandos, además de limpiar espacios innecesarios
 
 #Ejemplo: Entra la instrucción "add x5, x6, x7" y retorna ("add", ["x5", "x6", "x7"])
@@ -191,6 +198,35 @@ def _encode_i_load(mnemonic: str, operands: list[str]) -> int:
 
     return word #word representa la instrucción de carga completa como un entero de 32 bits
 
+#función que codifica una instrucción de almacenamiento de formato S
+#Ejemplo: "sw x5, 8(x6)" guarda el contenido de x5 en la dirección formada por x6 + 8
+def _encode_s(mnemonic: str, operands: list[str]) -> int:
+    if len(operands) != 2:
+        raise ValueError(
+            f"{mnemonic} utiliza la forma: {mnemonic} rs2, desplazamiento(rs1)"
+        )
+
+    rs2 = _parse_register(operands[0])
+    offset, rs1 = _parse_memory_operand(operands[1])
+    fields = S_INSTRUCTIONS[mnemonic]
+
+    #El inmediato de 12 bits se representa en complemento a dos cuando es negativo
+    #y después se divide porque el formato S lo coloca en dos zonas diferentes
+    immediate_bits = offset & 0b111111111111
+    immediate_high = (immediate_bits >> 5) & 0b1111111 #bits imm[11:5]
+    immediate_low = immediate_bits & 0b11111 #bits imm[4:0]
+
+    word = (
+        (immediate_high << 25)
+        | (rs2 << 20)
+        | (rs1 << 15)
+        | (fields["funct3"] << 12)
+        | (immediate_low << 7)
+        | fields["opcode"]
+    )
+
+    return word #word contiene ambas partes del inmediato en sus posiciones correspondientes
+
 
 def encode_instruction(instruction: str) -> int:
     """
@@ -211,6 +247,9 @@ def encode_instruction(instruction: str) -> int:
 
     if mnemonic in I_LOAD_INSTRUCTIONS: #si el mnemónico es lw o lb, utiliza el formato I con la sintaxis propia de memoria
         return _encode_i_load(mnemonic, operands)
+
+    if mnemonic in S_INSTRUCTIONS: #si el mnemónico es sw o sb, utiliza la codificación del formato S
+        return _encode_s(mnemonic, operands)
 
     # Los demás formatos se incorporarán por etapas. Mantener este error por
     # ahora evita producir una codificación incorrecta de forma silenciosa.
@@ -351,6 +390,67 @@ def explain_instruction(instruction: str, word: int) -> str:
             "",
             "Explicación de los campos:",
         ] + field_explanations
+
+        return "\n".join(explanation)
+
+    if mnemonic in S_INSTRUCTIONS:
+        #El formato S reparte el inmediato entre los bits 31-25 y 11-7, por eso primero
+        #se extraen ambas partes y después se vuelven a unir para mostrar su valor original
+        immediate_high = (word >> 25) & 0b1111111
+        rs2 = (word >> 20) & 0b11111
+        rs1 = (word >> 15) & 0b11111
+        funct3 = (word >> 12) & 0b111
+        immediate_low = (word >> 7) & 0b11111
+        opcode = word & 0b1111111
+
+        immediate_bits = (immediate_high << 5) | immediate_low
+        immediate = immediate_bits
+        if immediate_bits & 0b100000000000:
+            immediate -= 1 << 12
+
+        ranges = ["31-25", "24-20", "19-15", "14-12", "11-7", "6-0"]
+        names = ["imm[11:5]", "rs2", "rs1", "funct3", "imm[4:0]", "opcode"]
+        values = [
+            f"{immediate_high:07b}",
+            f"{rs2:05b}",
+            f"{rs1:05b}",
+            f"{funct3:03b}",
+            f"{immediate_low:05b}",
+            f"{opcode:07b}",
+        ]
+
+        def table_row_s(label: str, cells: list[str]) -> str:
+            return f"{label:<7} | " + " | ".join(f"{cell:^10}" for cell in cells)
+
+        table = [
+            table_row_s("Bits", ranges),
+            table_row_s("Campo", names),
+            table_row_s("Valor", values),
+        ]
+        separator = "-" * len(table[0])
+
+        stored_data = (
+            "una palabra de 32 bits" if mnemonic == "sw"
+            else "el byte menos significativo"
+        )
+        explanation = [
+            f"Instrucción: {instruction.strip()}",
+            "Formato: S",
+            "",
+            table[0],
+            separator,
+            table[1],
+            table[2],
+            "",
+            f"BIN: {word:032b}",
+            "",
+            "Explicación de los campos:",
+            f"- imm[11:5] e imm[4:0]: forman el desplazamiento de 12 bits ({immediate}).",
+            f"- rs2: contiene el dato que se guardará, x{rs2}.",
+            f"- rs1: registro base utilizado para calcular la dirección, x{rs1}.",
+            f"- funct3: indica que {mnemonic} almacena {stored_data} ({funct3:03b}).",
+            f"- opcode: identifica un almacenamiento en memoria ({opcode:07b}).",
+        ]
 
         return "\n".join(explanation)
 
