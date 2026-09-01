@@ -2,11 +2,16 @@
 
 **CE4301 Arquitectura de Computadores I, segundo semestre de 2026**
 
+**Estudiante:** Javier Hernández Castillo  
+**Carné:** 2022321746  
+**Profesor:** Dr.-Ing. Jeferson González Gómez  
+**Institución:** Instituto Tecnológico de Costa Rica
+
 ## Descripción
 
-Este proyecto implementa una herramienta de línea de comandos capaz de convertir instrucciones de la ISA base **RV32I** a su representación binaria y hexadecimal de 32 bits.
+Este proyecto consiste en un codificador de instrucciones de la ISA base **RV32I**. El programa recibe una instrucción escrita en la terminal y la convierte a su representación binaria y hexadecimal de 32 bits.
 
-Además de producir la codificación, el programa muestra los campos que forman la instrucción, el rango de bits que ocupa cada uno y una explicación breve de su propósito. De esta manera, la herramienta no funciona únicamente como codificador, sino también como apoyo para comprender los formatos R, I, S y B de RISC-V.
+La idea no es mostrar únicamente el resultado final. También se imprimen los campos que forman la instrucción, los bits que ocupa cada uno y una explicación corta de para qué sirven. Esto permite revisar con más facilidad cómo se construyen los formatos R, I, S y B.
 
 Por ejemplo, la instrucción:
 
@@ -22,15 +27,11 @@ HEX: 0x007302b3
 
 ## Instrucciones soportadas
 
-El codificador implementa las 12 instrucciones solicitadas para el proyecto:
+El subconjunto utilizado es exactamente el que se indica en la especificación del proyecto:
 
-| Formato | Categoría | Instrucciones | Sintaxis general |
-|---|---|---|---|
-| R | Operaciones entre registros | `add`, `sub`, `and`, `or` | `instrucción rd, rs1, rs2` |
-| I | Operaciones con inmediato | `addi`, `andi` | `instrucción rd, rs1, inmediato` |
-| I | Cargas desde memoria | `lw`, `lb` | `instrucción rd, desplazamiento(rs1)` |
-| S | Almacenamientos en memoria | `sw`, `sb` | `instrucción rs2, desplazamiento(rs1)` |
-| B | Saltos condicionales | `beq`, `bne` | `instrucción rs1, rs2, desplazamiento` |
+![Subconjunto de instrucciones solicitado](docs/img/ss1.png)
+
+*Figura 1. Instrucciones que debe soportar el codificador según la especificación.*
 
 Los registros deben escribirse entre `x0` y `x31`. Los inmediatos y desplazamientos pueden ser positivos o negativos, siempre que se encuentren dentro del rango permitido por su formato.
 
@@ -67,14 +68,11 @@ Luego se pasa la instrucción completa como un único argumento entre comillas:
 ./run.sh "add x5, x6, x7"
 ```
 
-También pueden codificarse instrucciones de los demás formatos:
+La especificación también establece este punto de entrada y muestra ejemplos para los distintos formatos:
 
-```bash
-./run.sh "addi x10, x1, -12"
-./run.sh "lw x5, 8(x6)"
-./run.sh "sw x10, -12(x1)"
-./run.sh "beq x5, x6, -4"
-```
+![Modo de operación indicado en la especificación](docs/img/ss2.png)
+
+*Figura 2. Forma de ejecutar el programa y ejemplos proporcionados en la especificación.*
 
 La última línea siempre conserva el siguiente formato, requerido para la validación automática:
 
@@ -93,7 +91,11 @@ Arqui1-Proyecto1-RISCV-Encoder/
 ├── tests/
 │   └── validate_against_toolchain.py
 └── docs/
-    └── validation-results.md
+    ├── validation-results.md
+    └── img/
+        ├── ss1.png
+        ├── ss2.png
+        └── ss3.png
 ```
 
 - `encoder_skeleton.py`: contiene el parser, las tablas de instrucciones, la codificación y la explicación visual.
@@ -101,10 +103,44 @@ Arqui1-Proyecto1-RISCV-Encoder/
 - `vectores_ejemplo.txt`: contiene los ejemplos iniciales proporcionados con el kit del proyecto.
 - `tests/validate_against_toolchain.py`: compara el encoder con las herramientas oficiales de RISC-V.
 - `docs/validation-results.md`: conserva la evidencia generada durante la validación.
+- `docs/img/`: contiene las capturas utilizadas en este documento.
+
+## Arquitectura del programa
+
+Todo el proceso principal está en `encoder_skeleton.py`. Para que el archivo no quedara como una sola función extensa, lo dividí en varias partes pequeñas.
+
+Al inicio se encuentran las tablas de instrucciones. En ellas se guardan los valores fijos de cada mnemónico, como `opcode`, `funct3` y `funct7`. De esta forma no es necesario repetir esos valores dentro de cada función.
+
+Después aparecen las funciones auxiliares que procesan la entrada:
+
+- `_split_instruction()` separa el mnemónico de los operandos.
+- `_parse_register()` convierte un registro como `x5` al número `5` y revisa que esté entre `x0` y `x31`.
+- `_parse_immediate()` valida los inmediatos de 12 bits.
+- `_parse_branch_offset()` valida los desplazamientos de los saltos y comprueba que sean pares.
+- `_parse_memory_operand()` separa expresiones como `8(x6)` en desplazamiento y registro base.
+
+La codificación se hace en funciones distintas para R, I, S y B. Decidí separar las instrucciones I aritméticas de las cargas porque, aunque usan el mismo formato de bits, su sintaxis no es igual. Por ejemplo, `addi` recibe tres operandos separados, mientras que `lw` utiliza la forma `desplazamiento(registro)`.
+
+`encode_instruction()` funciona como coordinador: reconoce el mnemónico y envía los operandos al codificador correspondiente. Cada codificador coloca los campos en su posición mediante desplazamientos de bits y luego los une con operaciones OR.
+
+Por último, `explain_instruction()` vuelve a separar la palabra codificada para mostrar sus campos. La función `main()` recibe el argumento enviado desde `run.sh`, controla los posibles errores e imprime la explicación, el binario y la línea `HEX`.
+
+En resumen, el recorrido de una instrucción es:
+
+```text
+run.sh -> main() -> encode_instruction() -> codificador del formato
+       -> explain_instruction() -> salida BIN y HEX
+```
 
 ## Validación
 
-El codificador fue comparado con GNU `as`, `ld` y `objdump` para RISC-V mediante tres casos distintos por instrucción. Los **36 casos de prueba** coincidieron con el toolchain oficial.
+La especificación solicita al menos tres casos distintos para cada una de las 12 instrucciones:
+
+![Requisito de validación contra herramientas oficiales](docs/img/ss3.png)
+
+*Figura 3. Cantidad y tipo de pruebas solicitadas para la validación.*
+
+Para cumplir este requisito, el codificador fue comparado con GNU `as`, `ld` y `objdump` para RISC-V. Los **36 casos de prueba** coincidieron con el toolchain oficial.
 
 La validación puede repetirse con:
 
