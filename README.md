@@ -134,6 +134,127 @@ run.sh -> main() -> encode_instruction() -> codificador del formato
        -> explain_instruction() -> salida BIN y HEX
 ```
 
+## Formatos de instrucción
+
+Aunque todas las instrucciones terminan representadas por 32 bits, la posición de sus campos cambia según el formato. La distribución utilizada en el programa se tomó de la tabla **RV32I Base Instruction Set** [1].
+
+### Formato R
+
+Se utiliza en `add`, `sub`, `and` y `or`. Estas instrucciones trabajan únicamente con registros, por lo que no necesitan un inmediato. Los campos se acomodan en el siguiente orden: `funct7`, `rs2`, `rs1`, `funct3`, `rd` y `opcode`.
+
+En `_encode_r()` cada valor se desplaza hasta el bit donde comienza su campo. Por ejemplo, `funct7` se mueve 25 posiciones y `rd` se mueve 7. Al final todos los campos se unen con operaciones OR.
+
+### Formato I
+
+Este formato se usa tanto para las operaciones aritméticas `addi` y `andi` como para las cargas `lw` y `lb`. Sus campos son `imm[11:0]`, `rs1`, `funct3`, `rd` y `opcode`.
+
+El inmediato ocupa 12 bits. Antes de colocarlo se aplica la máscara `0xFFF`, lo que también permite conservar la representación en complemento a dos cuando el valor es negativo. Las cargas utilizan la misma distribución de bits, pero sus operandos se escriben como `desplazamiento(registro)`.
+
+### Formato S
+
+`sw` y `sb` utilizan este formato para almacenar datos en memoria. En este caso no existe `rd`, porque la instrucción no guarda un resultado en un registro destino. El dato se toma de `rs2` y la dirección se calcula a partir de `rs1` y el desplazamiento.
+
+El inmediato de 12 bits se divide en dos partes. Los bits `imm[11:5]` se colocan en las posiciones 31 a 25 y `imm[4:0]` en las posiciones 11 a 7. Esta separación se realiza dentro de `_encode_s()`.
+
+### Formato B
+
+El formato B corresponde a `beq` y `bne`. Los registros `rs1` y `rs2` contienen los valores que se comparan y el inmediato indica cuánto debe desplazarse el contador de programa si se cumple la condición.
+
+El desplazamiento debe ser par, ya que su bit menos significativo siempre vale cero y no se almacena. Los demás bits se reparten como `imm[12]`, `imm[10:5]`, `imm[4:1]` e `imm[11]`. Esta distribución es la parte más particular del formato y se construye explícitamente en `_encode_b()`.
+
+## Ejemplos de salida
+
+Los siguientes ejemplos fueron generados con el propio programa. Se incluye uno por cada formato solicitado.
+
+### Ejemplo de formato R
+
+```text
+Instrucción: add x5, x6, x7
+Formato: R
+
+Bits    |  31-25   |  24-20   |  19-15   |  14-12   |   11-7   |   6-0
+-------------------------------------------------------------------------
+Campo   |  funct7  |   rs2    |   rs1    |  funct3  |    rd    |  opcode
+Valor   | 0000000  |  00111   |  00110   |   000    |  00101   | 0110011
+
+BIN: 00000000011100110000001010110011
+
+Explicación de los campos:
+- funct7: completa la selección de la operación (0000000).
+- rs2: segundo registro fuente, x7.
+- rs1: primer registro fuente, x6.
+- funct3: selección principal de la operación (000).
+- rd: registro donde se guarda el resultado, x5.
+- opcode: identifica una operación entre registros (0110011).
+HEX: 0x007302b3
+```
+
+### Ejemplo de formato I
+
+```text
+Instrucción: addi x10, x1, -12
+Formato: I
+
+Bits    |    31-20     |    19-15     |    14-12     |     11-7     |     6-0
+----------------------------------------------------------------------------------
+Campo   |  imm[11:0]   |     rs1      |    funct3    |      rd      |    opcode
+Valor   | 111111110100 |    00001     |     000      |    01010     |   0010011
+
+BIN: 11111111010000001000010100010011
+
+Explicación de los campos:
+- imm[11:0]: valor inmediato de 12 bits (-12).
+- rs1: registro fuente, x1.
+- funct3: identifica la operación aritmética (000).
+- rd: registro donde se guarda el resultado, x10.
+- opcode: identifica una operación con inmediato (0010011).
+HEX: 0xff408513
+```
+
+### Ejemplo de formato S
+
+```text
+Instrucción: sw x10, -12(x1)
+Formato: S
+
+Bits    |   31-25    |   24-20    |   19-15    |   14-12    |    11-7    |    6-0
+-------------------------------------------------------------------------------------
+Campo   | imm[11:5]  |    rs2     |    rs1     |   funct3   |  imm[4:0]  |   opcode
+Valor   |  1111111   |   01010    |   00001    |    010     |   10100    |  0100011
+
+BIN: 11111110101000001010101000100011
+
+Explicación de los campos:
+- imm[11:5] e imm[4:0]: forman el desplazamiento de 12 bits (-12).
+- rs2: contiene el dato que se guardará, x10.
+- rs1: registro base utilizado para calcular la dirección, x1.
+- funct3: indica que sw almacena una palabra de 32 bits (010).
+- opcode: identifica un almacenamiento en memoria (0100011).
+HEX: 0xfea0aa23
+```
+
+### Ejemplo de formato B
+
+```text
+Instrucción: beq x5, x6, -4
+Formato: B
+
+Bits    |     31     |   30-25    |   24-20    |   19-15    |   14-12    |    11-8    |     7      |    6-0
+---------------------------------------------------------------------------------------------------------------
+Campo   |  imm[12]   | imm[10:5]  |    rs2     |    rs1     |   funct3   |  imm[4:1]  |  imm[11]   |   opcode
+Valor   |     1      |   111111   |   00110    |   00101    |    000     |    1110    |     1      |  1100011
+
+BIN: 11111110011000101000111011100011
+
+Explicación de los campos:
+- inmediato: sus cuatro partes forman el desplazamiento del salto (-4).
+- imm[0]: no se almacena porque siempre vale 0.
+- rs1 y rs2: registros que se comparan, x5 y x6.
+- funct3: el salto ocurre si los registros son iguales (000).
+- opcode: identifica una instrucción de salto condicional (1100011).
+HEX: 0xfe628ee3
+```
+
 ## Validación
 
 La especificación solicita al menos tres casos distintos para cada una de las 12 instrucciones:
