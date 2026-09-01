@@ -13,6 +13,8 @@ Este proyecto consiste en un codificador de instrucciones de la ISA base **RV32I
 
 La idea no es mostrar únicamente el resultado final. También se imprimen los campos que forman la instrucción, los bits que ocupa cada uno y una explicación corta de para qué sirven. Esto permite revisar con más facilidad cómo se construyen los formatos R, I, S y B.
 
+Los campos de codificación se consultaron en el manual oficial de RISC-V [1], mientras que el alcance y los requisitos del programa se tomaron de la especificación del proyecto [2].
+
 Por ejemplo, la instrucción:
 
 ```text
@@ -31,7 +33,7 @@ El subconjunto utilizado es exactamente el que se indica en la especificación d
 
 ![Subconjunto de instrucciones solicitado](docs/img/ss1.png)
 
-*Figura 1. Instrucciones que debe soportar el codificador según la especificación.*
+*Figura 1. Instrucciones que debe soportar el codificador según la especificación [2].*
 
 Los registros deben escribirse entre `x0` y `x31`. Los inmediatos y desplazamientos pueden ser positivos o negativos, siempre que se encuentren dentro del rango permitido por su formato.
 
@@ -72,7 +74,7 @@ La especificación también establece este punto de entrada y muestra ejemplos p
 
 ![Modo de operación indicado en la especificación](docs/img/ss2.png)
 
-*Figura 2. Forma de ejecutar el programa y ejemplos proporcionados en la especificación.*
+*Figura 2. Forma de ejecutar el programa y ejemplos proporcionados en la especificación [2].*
 
 La última línea siempre conserva el siguiente formato, requerido para la validación automática:
 
@@ -138,7 +140,7 @@ La especificación solicita al menos tres casos distintos para cada una de las 1
 
 ![Requisito de validación contra herramientas oficiales](docs/img/ss3.png)
 
-*Figura 3. Cantidad y tipo de pruebas solicitadas para la validación.*
+*Figura 3. Cantidad y tipo de pruebas solicitadas para la validación [2].*
 
 Para cumplir este requisito, el codificador fue comparado con GNU `as`, `ld` y `objdump` para RISC-V. Los **36 casos de prueba** coincidieron con el toolchain oficial.
 
@@ -151,6 +153,12 @@ python3 tests/validate_against_toolchain.py \
 
 El detalle de los resultados se encuentra en [docs/validation-results.md](docs/validation-results.md).
 
-## Fuente de la codificación
+## Fuentes consultadas
 
-Los valores de `opcode`, `funct3`, `funct7` y la distribución de los inmediatos se obtuvieron de la tabla **RV32I Base Instruction Set** del manual oficial de la ISA RISC-V.
+Los valores de `opcode`, `funct3`, `funct7` y la distribución de los inmediatos se obtuvieron de la tabla **RV32I Base Instruction Set** [1]. La especificación del proyecto [2] se utilizó para definir las instrucciones soportadas, el modo de ejecución y los casos que debían validarse.
+
+## Referencias
+
+[1] A. Waterman and K. Asanović, Eds., *The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA*, document version 20191213. RISC-V Foundation, 2019, p. 130.
+
+[2] J. González Gómez, “Proyecto Individual: Codificador Educativo de Instrucciones RISC-V,” especificación de proyecto, CE-4301 Arquitectura de Computadores I, Instituto Tecnológico de Costa Rica, 2026.
