@@ -90,22 +90,19 @@ Arqui1-Proyecto1-RISCV-Encoder/
 ├── run.sh
 ├── README.md
 ├── vectores_ejemplo.txt
+├── validacion_resultados.md
 ├── tests/
 │   └── validate_against_toolchain.py
 └── docs/
-    ├── validation-results.md
     └── img/
-        ├── ss1.png
-        ├── ss2.png
-        └── ss3.png
 ```
 
 - `encoder_skeleton.py`: contiene el parser, las tablas de instrucciones, la codificación y la explicación visual.
 - `run.sh`: punto de entrada requerido para ejecutar el programa.
 - `vectores_ejemplo.txt`: contiene los ejemplos iniciales proporcionados con el kit del proyecto.
+- `validacion_resultados.md`: contiene la comparación de los 36 casos contra el toolchain oficial.
 - `tests/validate_against_toolchain.py`: compara el encoder con las herramientas oficiales de RISC-V.
-- `docs/validation-results.md`: conserva la evidencia generada durante la validación.
-- `docs/img/`: contiene las capturas utilizadas en este documento.
+- `docs/img/`: contiene las capturas `ss1.png` a `ss8.png` utilizadas en este documento.
 
 ## Arquitectura del programa
 
@@ -136,124 +133,12 @@ run.sh -> main() -> encode_instruction() -> codificador del formato
 
 ## Formatos de instrucción
 
-Aunque todas las instrucciones terminan representadas por 32 bits, la posición de sus campos cambia según el formato. La distribución utilizada en el programa se tomó de la tabla **RV32I Base Instruction Set** [1].
+La distribución de los campos se tomó de la tabla **RV32I Base Instruction Set** [1]. En el código se manejan de esta forma:
 
-### Formato R
-
-Se utiliza en `add`, `sub`, `and` y `or`. Estas instrucciones trabajan únicamente con registros, por lo que no necesitan un inmediato. Los campos se acomodan en el siguiente orden: `funct7`, `rs2`, `rs1`, `funct3`, `rd` y `opcode`.
-
-En `_encode_r()` cada valor se desplaza hasta el bit donde comienza su campo. Por ejemplo, `funct7` se mueve 25 posiciones y `rd` se mueve 7. Al final todos los campos se unen con operaciones OR.
-
-### Formato I
-
-Este formato se usa tanto para las operaciones aritméticas `addi` y `andi` como para las cargas `lw` y `lb`. Sus campos son `imm[11:0]`, `rs1`, `funct3`, `rd` y `opcode`.
-
-El inmediato ocupa 12 bits. Antes de colocarlo se aplica la máscara `0xFFF`, lo que también permite conservar la representación en complemento a dos cuando el valor es negativo. Las cargas utilizan la misma distribución de bits, pero sus operandos se escriben como `desplazamiento(registro)`.
-
-### Formato S
-
-`sw` y `sb` utilizan este formato para almacenar datos en memoria. En este caso no existe `rd`, porque la instrucción no guarda un resultado en un registro destino. El dato se toma de `rs2` y la dirección se calcula a partir de `rs1` y el desplazamiento.
-
-El inmediato de 12 bits se divide en dos partes. Los bits `imm[11:5]` se colocan en las posiciones 31 a 25 y `imm[4:0]` en las posiciones 11 a 7. Esta separación se realiza dentro de `_encode_s()`.
-
-### Formato B
-
-El formato B corresponde a `beq` y `bne`. Los registros `rs1` y `rs2` contienen los valores que se comparan y el inmediato indica cuánto debe desplazarse el contador de programa si se cumple la condición.
-
-El desplazamiento debe ser par, ya que su bit menos significativo siempre vale cero y no se almacena. Los demás bits se reparten como `imm[12]`, `imm[10:5]`, `imm[4:1]` e `imm[11]`. Esta distribución es la parte más particular del formato y se construye explícitamente en `_encode_b()`.
-
-## Ejemplos de salida
-
-Los siguientes ejemplos fueron generados con el propio programa. Se incluye uno por cada formato solicitado.
-
-### Ejemplo de formato R
-
-```text
-Instrucción: add x5, x6, x7
-Formato: R
-
-Bits    |  31-25   |  24-20   |  19-15   |  14-12   |   11-7   |   6-0
--------------------------------------------------------------------------
-Campo   |  funct7  |   rs2    |   rs1    |  funct3  |    rd    |  opcode
-Valor   | 0000000  |  00111   |  00110   |   000    |  00101   | 0110011
-
-BIN: 00000000011100110000001010110011
-
-Explicación de los campos:
-- funct7: completa la selección de la operación (0000000).
-- rs2: segundo registro fuente, x7.
-- rs1: primer registro fuente, x6.
-- funct3: selección principal de la operación (000).
-- rd: registro donde se guarda el resultado, x5.
-- opcode: identifica una operación entre registros (0110011).
-HEX: 0x007302b3
-```
-
-### Ejemplo de formato I
-
-```text
-Instrucción: addi x10, x1, -12
-Formato: I
-
-Bits    |    31-20     |    19-15     |    14-12     |     11-7     |     6-0
-----------------------------------------------------------------------------------
-Campo   |  imm[11:0]   |     rs1      |    funct3    |      rd      |    opcode
-Valor   | 111111110100 |    00001     |     000      |    01010     |   0010011
-
-BIN: 11111111010000001000010100010011
-
-Explicación de los campos:
-- imm[11:0]: valor inmediato de 12 bits (-12).
-- rs1: registro fuente, x1.
-- funct3: identifica la operación aritmética (000).
-- rd: registro donde se guarda el resultado, x10.
-- opcode: identifica una operación con inmediato (0010011).
-HEX: 0xff408513
-```
-
-### Ejemplo de formato S
-
-```text
-Instrucción: sw x10, -12(x1)
-Formato: S
-
-Bits    |   31-25    |   24-20    |   19-15    |   14-12    |    11-7    |    6-0
--------------------------------------------------------------------------------------
-Campo   | imm[11:5]  |    rs2     |    rs1     |   funct3   |  imm[4:0]  |   opcode
-Valor   |  1111111   |   01010    |   00001    |    010     |   10100    |  0100011
-
-BIN: 11111110101000001010101000100011
-
-Explicación de los campos:
-- imm[11:5] e imm[4:0]: forman el desplazamiento de 12 bits (-12).
-- rs2: contiene el dato que se guardará, x10.
-- rs1: registro base utilizado para calcular la dirección, x1.
-- funct3: indica que sw almacena una palabra de 32 bits (010).
-- opcode: identifica un almacenamiento en memoria (0100011).
-HEX: 0xfea0aa23
-```
-
-### Ejemplo de formato B
-
-```text
-Instrucción: beq x5, x6, -4
-Formato: B
-
-Bits    |     31     |   30-25    |   24-20    |   19-15    |   14-12    |    11-8    |     7      |    6-0
----------------------------------------------------------------------------------------------------------------
-Campo   |  imm[12]   | imm[10:5]  |    rs2     |    rs1     |   funct3   |  imm[4:1]  |  imm[11]   |   opcode
-Valor   |     1      |   111111   |   00110    |   00101    |    000     |    1110    |     1      |  1100011
-
-BIN: 11111110011000101000111011100011
-
-Explicación de los campos:
-- inmediato: sus cuatro partes forman el desplazamiento del salto (-4).
-- imm[0]: no se almacena porque siempre vale 0.
-- rs1 y rs2: registros que se comparan, x5 y x6.
-- funct3: el salto ocurre si los registros son iguales (000).
-- opcode: identifica una instrucción de salto condicional (1100011).
-HEX: 0xfe628ee3
-```
+- **R:** usa `funct7`, `rs2`, `rs1`, `funct3`, `rd` y `opcode`.
+- **I:** coloca un inmediato de 12 bits antes de `rs1`, `funct3`, `rd` y `opcode`.
+- **S:** divide el inmediato entre `imm[11:5]` e `imm[4:0]`.
+- **B:** reparte el desplazamiento entre `imm[12]`, `imm[10:5]`, `imm[4:1]` e `imm[11]`; el bit cero no se almacena.
 
 ## Validación
 
@@ -263,16 +148,81 @@ La especificación solicita al menos tres casos distintos para cada una de las 1
 
 *Figura 3. Cantidad y tipo de pruebas solicitadas para la validación [2].*
 
-Para cumplir este requisito, el codificador fue comparado con GNU `as`, `ld` y `objdump` para RISC-V. Los **36 casos de prueba** coincidieron con el toolchain oficial.
+El script ejecuta `run.sh`, ensambla el mismo caso para `rv32i`, obtiene la referencia con `objdump -d` y compara ambas palabras. Los 36 casos cubren registros comunes y extremos, inmediatos positivos y negativos y valores límite.
 
-La validación puede repetirse con:
+### Entorno utilizado
+
+Las versiones utilizadas para ejecutar y validar el proyecto fueron:
+
+```text
+Python 3.12.3
+GNU assembler (2.42-1ubuntu1+6) 2.42
+```
+
+### Resultado de la validación
 
 ```bash
 python3 tests/validate_against_toolchain.py \
-  --report docs/validation-results.md
+  --report validacion_resultados.md
 ```
 
-El detalle de los resultados se encuentra en [docs/validation-results.md](docs/validation-results.md).
+Los **36 casos coincidieron**. La comparación completa puede consultarse en [validacion_resultados.md](validacion_resultados.md).
+
+## Ejemplos de salida
+
+### Formato R
+
+```bash
+./run.sh "add x5, x6, x7"
+```
+
+![Ejecución de una instrucción de formato R](docs/img/ss4.png)
+
+*Figura 4. Codificación y explicación de `add x5, x6, x7`.*
+
+### Formato I
+
+```bash
+./run.sh "addi x10, x1, -12"
+```
+
+![Ejecución de una instrucción de formato I](docs/img/ss5.png)
+
+*Figura 5. Codificación y explicación de `addi x10, x1, -12`.*
+
+### Formato S
+
+```bash
+./run.sh "sw x10, -12(x1)"
+```
+
+![Ejecución de una instrucción de formato S](docs/img/ss6.png)
+
+*Figura 6. Codificación y explicación de `sw x10, -12(x1)`.*
+
+### Formato B
+
+```bash
+./run.sh "beq x5, x6, -4"
+```
+
+![Ejecución de una instrucción de formato B](docs/img/ss7.png)
+
+*Figura 7. Codificación y explicación de `beq x5, x6, -4`.*
+
+## Manejo de errores
+
+El programa rechaza instrucciones no soportadas, registros fuera de `x0` a `x31`, cantidades incorrectas de operandos, inmediatos fuera de rango, saltos impares y operandos de memoria mal escritos. En estos casos muestra el problema y no genera una línea `HEX`.
+
+```bash
+./run.sh "addi x1, x2, 2048"
+./run.sh "beq x1, x2, 3"
+./run.sh "lw x1, 8x2"
+```
+
+![Ejemplos de entradas inválidas](docs/img/ss8.png)
+
+*Figura 8. Mensajes producidos al detectar diferentes errores de entrada.*
 
 ## Fuentes consultadas
 
