@@ -1,4 +1,4 @@
-# Codificador educativo de instrucciones RISC-V RV32I
+# Proyecto Individual: Codificador Educativo de instrucciones RISC-V RV32I
 
 **CE4301 Arquitectura de Computadores I, segundo semestre de 2026**
 
