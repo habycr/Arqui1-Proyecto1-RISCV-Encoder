@@ -86,23 +86,32 @@ HEX: 0xXXXXXXXX
 
 ```text
 Arqui1-Proyecto1-RISCV-Encoder/
+├── .gitignore
+├── LICENSE
+├── README.md
 ├── encoder_skeleton.py
 ├── run.sh
-├── README.md
 ├── vectores_ejemplo.txt
 ├── validacion_resultados.md
 ├── tests/
 │   └── validate_against_toolchain.py
-└── docs/
-    └── img/
+├── docs/
+│   └── img/
+│       └── ss1.png ... ss8.png
+└── isa-encoder-riscv-kit-2026ii/
+    ├── README.md
+    └── especificacion-proyecto-individual-isa-encoder-riscv.pdf
 ```
 
+- `.gitignore`: evita agregar archivos temporales generados por Python.
+- `LICENSE`: contiene la licencia MIT utilizada para el repositorio.
 - `encoder_skeleton.py`: contiene el parser, las tablas de instrucciones, la codificación y la explicación visual.
 - `run.sh`: punto de entrada requerido para ejecutar el programa.
 - `vectores_ejemplo.txt`: contiene los ejemplos iniciales proporcionados con el kit del proyecto.
 - `validacion_resultados.md`: contiene la comparación de los 36 casos contra el toolchain oficial.
 - `tests/validate_against_toolchain.py`: compara el encoder con las herramientas oficiales de RISC-V.
 - `docs/img/`: contiene las capturas `ss1.png` a `ss8.png` utilizadas en este documento.
+- `isa-encoder-riscv-kit-2026ii/`: conserva la especificación y la documentación original del kit.
 
 ## Arquitectura del programa
 
@@ -232,4 +241,4 @@ Los valores de `opcode`, `funct3`, `funct7` y la distribución de los inmediatos
 
 [1] A. Waterman and K. Asanović, Eds., *The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA*, document version 20191213. RISC-V Foundation, 2019, p. 130.
 
-[2] J. González Gómez, “Proyecto Individual: Codificador Educativo de Instrucciones RISC-V,” especificación de proyecto, CE-4301 Arquitectura de Computadores I, Instituto Tecnológico de Costa Rica, 2026.
+[2] J. González Gómez, “Proyecto Individual: Codificador Educativo de Instrucciones RISC-V,” especificación de proyecto, CE-4301 Arquitectura de Computadores I, Instituto Tecnológico de Costa Rica, 2026. [En línea]. Disponible en: [especificacion-proyecto-individual-isa-encoder-riscv.pdf](isa-encoder-riscv-kit-2026ii/especificacion-proyecto-individual-isa-encoder-riscv.pdf)
