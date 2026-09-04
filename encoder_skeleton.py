@@ -342,35 +342,21 @@ def explain_instruction(instruction: str, word: int) -> str:
         rd = (word >> 7) & 0b11111
         opcode = word & 0b1111111
 
-        ranges = ["31-25", "24-20", "19-15", "14-12", "11-7", "6-0"]
-        names = ["funct7", "rs2", "rs1", "funct3", "rd", "opcode"]
-        values = [
-            f"{funct7:07b}",
-            f"{rs2:05b}",
-            f"{rs1:05b}",
-            f"{funct3:03b}",
-            f"{rd:05b}",
-            f"{opcode:07b}",
+        field_lines = [
+            f"- [31-25] funct7 = {funct7:07b}",
+            f"- [24-20] rs2 = {rs2:05b}",
+            f"- [19-15] rs1 = {rs1:05b}",
+            f"- [14-12] funct3 = {funct3:03b}",
+            f"- [11-7] rd = {rd:05b}",
+            f"- [6-0] opcode = {opcode:07b}",
         ]
-
-        def table_row_r(label: str, cells: list[str]) -> str:
-            return f"{label:<7} | " + " | ".join(f"{cell:^8}" for cell in cells)
-
-        table = [
-            table_row_r("Bits", ranges),
-            table_row_r("Campo", names),
-            table_row_r("Valor", values),
-        ]
-        separator = "-" * len(table[0])
 
         explanation = [
             f"Instrucción: {instruction.strip()}",
             "Formato: R",
             "",
-            table[0],
-            separator,
-            table[1],
-            table[2],
+            "Distribución de los 32 bits:",
+            *field_lines,
             "",
             f"BIN: {word:032b}",
             "",
@@ -399,25 +385,13 @@ def explain_instruction(instruction: str, word: int) -> str:
         if immediate_bits & 0b100000000000:
             immediate -= 1 << 12
 
-        ranges = ["31-20", "19-15", "14-12", "11-7", "6-0"]
-        names = ["imm[11:0]", "rs1", "funct3", "rd", "opcode"]
-        values = [
-            f"{immediate_bits:012b}",
-            f"{rs1:05b}",
-            f"{funct3:03b}",
-            f"{rd:05b}",
-            f"{opcode:07b}",
+        field_lines = [
+            f"- [31-20] imm[11:0] = {immediate_bits:012b}",
+            f"- [19-15] rs1 = {rs1:05b}",
+            f"- [14-12] funct3 = {funct3:03b}",
+            f"- [11-7] rd = {rd:05b}",
+            f"- [6-0] opcode = {opcode:07b}",
         ]
-
-        def table_row_i(label: str, cells: list[str]) -> str:
-            return f"{label:<7} | " + " | ".join(f"{cell:^12}" for cell in cells)
-
-        table = [
-            table_row_i("Bits", ranges),
-            table_row_i("Campo", names),
-            table_row_i("Valor", values),
-        ]
-        separator = "-" * len(table[0])
 
         if mnemonic in I_LOAD_INSTRUCTIONS:
             loaded_data = (
@@ -444,10 +418,8 @@ def explain_instruction(instruction: str, word: int) -> str:
             f"Instrucción: {instruction.strip()}",
             "Formato: I",
             "",
-            table[0],
-            separator,
-            table[1],
-            table[2],
+            "Distribución de los 32 bits:",
+            *field_lines,
             "",
             f"BIN: {word:032b}",
             "",
@@ -471,26 +443,14 @@ def explain_instruction(instruction: str, word: int) -> str:
         if immediate_bits & 0b100000000000:
             immediate -= 1 << 12
 
-        ranges = ["31-25", "24-20", "19-15", "14-12", "11-7", "6-0"]
-        names = ["imm[11:5]", "rs2", "rs1", "funct3", "imm[4:0]", "opcode"]
-        values = [
-            f"{immediate_high:07b}",
-            f"{rs2:05b}",
-            f"{rs1:05b}",
-            f"{funct3:03b}",
-            f"{immediate_low:05b}",
-            f"{opcode:07b}",
+        field_lines = [
+            f"- [31-25] imm[11:5] = {immediate_high:07b}",
+            f"- [24-20] rs2 = {rs2:05b}",
+            f"- [19-15] rs1 = {rs1:05b}",
+            f"- [14-12] funct3 = {funct3:03b}",
+            f"- [11-7] imm[4:0] = {immediate_low:05b}",
+            f"- [6-0] opcode = {opcode:07b}",
         ]
-
-        def table_row_s(label: str, cells: list[str]) -> str:
-            return f"{label:<7} | " + " | ".join(f"{cell:^10}" for cell in cells)
-
-        table = [
-            table_row_s("Bits", ranges),
-            table_row_s("Campo", names),
-            table_row_s("Valor", values),
-        ]
-        separator = "-" * len(table[0])
 
         stored_data = (
             "una palabra de 32 bits" if mnemonic == "sw"
@@ -500,10 +460,8 @@ def explain_instruction(instruction: str, word: int) -> str:
             f"Instrucción: {instruction.strip()}",
             "Formato: S",
             "",
-            table[0],
-            separator,
-            table[1],
-            table[2],
+            "Distribución de los 32 bits:",
+            *field_lines,
             "",
             f"BIN: {word:032b}",
             "",
@@ -539,31 +497,16 @@ def explain_instruction(instruction: str, word: int) -> str:
         if immediate_bits & 0b1000000000000:
             immediate -= 1 << 13
 
-        ranges = ["31", "30-25", "24-20", "19-15", "14-12", "11-8", "7", "6-0"]
-        names = [
-            "imm[12]", "imm[10:5]", "rs2", "rs1",
-            "funct3", "imm[4:1]", "imm[11]", "opcode",
+        field_lines = [
+            f"- [31] imm[12] = {immediate_12:b}",
+            f"- [30-25] imm[10:5] = {immediate_10_5:06b}",
+            f"- [24-20] rs2 = {rs2:05b}",
+            f"- [19-15] rs1 = {rs1:05b}",
+            f"- [14-12] funct3 = {funct3:03b}",
+            f"- [11-8] imm[4:1] = {immediate_4_1:04b}",
+            f"- [7] imm[11] = {immediate_11:b}",
+            f"- [6-0] opcode = {opcode:07b}",
         ]
-        values = [
-            f"{immediate_12:01b}",
-            f"{immediate_10_5:06b}",
-            f"{rs2:05b}",
-            f"{rs1:05b}",
-            f"{funct3:03b}",
-            f"{immediate_4_1:04b}",
-            f"{immediate_11:01b}",
-            f"{opcode:07b}",
-        ]
-
-        def table_row_b(label: str, cells: list[str]) -> str:
-            return f"{label:<7} | " + " | ".join(f"{cell:^10}" for cell in cells)
-
-        table = [
-            table_row_b("Bits", ranges),
-            table_row_b("Campo", names),
-            table_row_b("Valor", values),
-        ]
-        separator = "-" * len(table[0])
 
         condition = (
             "son iguales" if mnemonic == "beq"
@@ -573,10 +516,8 @@ def explain_instruction(instruction: str, word: int) -> str:
             f"Instrucción: {instruction.strip()}",
             "Formato: B",
             "",
-            table[0],
-            separator,
-            table[1],
-            table[2],
+            "Distribución de los 32 bits:",
+            *field_lines,
             "",
             f"BIN: {word:032b}",
             "",
