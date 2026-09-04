@@ -241,6 +241,4 @@ Los valores de `opcode`, `funct3`, `funct7` y la distribución de los inmediatos
 
 [1] A. Waterman and K. Asanović, Eds., *The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA*, document version 20191213. RISC-V Foundation, 2019, p. 130.
 
-[2] J. González Gómez, “Proyecto Individual: Codificador Educativo de Instrucciones RISC-V,” especificación de proyecto, CE-4301 Arquitectura de Computadores I, Instituto Tecnológico de Costa Rica, 2026. [En línea].
-
-
+[2] J. González Gómez, “Proyecto Individual: Codificador Educativo de Instrucciones RISC-V,” especificación de proyecto, CE-4301 Arquitectura de Computadores I, Instituto Tecnológico de Costa Rica, 2026. [En línea]. Disponible en: [especificacion-proyecto-individual-isa-encoder-riscv.pdf](isa-encoder-riscv-kit-2026ii/especificacion-proyecto-individual-isa-encoder-riscv.pdf)
