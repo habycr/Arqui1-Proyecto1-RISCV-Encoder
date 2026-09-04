@@ -91,7 +91,6 @@ Arqui1-Proyecto1-RISCV-Encoder/
 ├── tests/
 │   └── validate_against_toolchain.py
 ├── docs/
-│   ├── diagrama1.dot
 │   └── img/
 │       ├── diagrama1.png
 │       └── ss1.png ... ss8.png
@@ -108,7 +107,6 @@ Arqui1-Proyecto1-RISCV-Encoder/
 - `vectores_ejemplo.txt`: contiene los ejemplos iniciales proporcionados con el kit del proyecto.
 - `validacion_resultados.md`: contiene la comparación de los 36 casos contra el toolchain oficial.
 - `tests/validate_against_toolchain.py`: compara el encoder con las herramientas oficiales de RISC-V.
-- `docs/diagrama1.dot`: contiene el código Graphviz del flujo principal.
 - `docs/img/`: contiene el diagrama generado y las capturas utilizadas en esta documentación.
 - `isa-encoder-riscv-kit-2026ii/`: conserva la especificación y la documentación original del kit.
 
