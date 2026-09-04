@@ -12,7 +12,7 @@ Para ejecutar el codificador se necesita:
 
 ## Descarga
 
-Clona el repositorio y entra en la carpeta del proyecto:
+Clonar el repositorio y entrar en la carpeta del proyecto:
 
 ```bash
 git clone https://github.com/habycr/Arqui1-Proyecto1-RISCV-Encoder.git
@@ -21,13 +21,13 @@ cd Arqui1-Proyecto1-RISCV-Encoder
 
 ## Ejecución
 
-La primera vez, concede permiso de ejecución al archivo `run.sh`:
+La primera vez, se debe conceder permiso de ejecución al archivo `run.sh`:
 
 ```bash
 chmod +x run.sh
 ```
 
-Luego pasa una instrucción completa como un único argumento entre comillas:
+Se le pasa una instrucción completa como un único argumento entre comillas:
 
 ```bash
 ./run.sh "add x5, x6, x7"

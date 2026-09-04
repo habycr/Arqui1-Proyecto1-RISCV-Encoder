@@ -107,7 +107,7 @@ Arqui1-Proyecto1-RISCV-Encoder/
 - `vectores_ejemplo.txt`: contiene los ejemplos iniciales proporcionados con el kit del proyecto.
 - `validacion_resultados.md`: contiene la comparación de los 36 casos contra el toolchain oficial.
 - `tests/validate_against_toolchain.py`: compara el encoder con las herramientas oficiales de RISC-V.
-- `docs/img/`: contiene el diagrama generado y las capturas utilizadas en esta documentación.
+- `docs/img/`: contiene el diagrama y las capturas utilizadas en esta documentación.
 - `isa-encoder-riscv-kit-2026ii/`: conserva la especificación y la documentación original del kit.
 
 ## Arquitectura del programa
@@ -257,4 +257,4 @@ Los valores de `opcode`, `funct3`, `funct7` y la distribución de los inmediatos
 
 [1] A. Waterman and K. Asanović, Eds., *The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA*, document version 20191213. RISC-V Foundation, 2019, p. 130.
 
-[2] J. González Gómez, “Proyecto Individual: Codificador Educativo de Instrucciones RISC-V,” especificación de proyecto, CE-4301 Arquitectura de Computadores I, Instituto Tecnológico de Costa Rica, 2026. [En línea]. Disponible en: [especificacion-proyecto-individual-isa-encoder-riscv.pdf](isa-encoder-riscv-kit-2026ii/especificacion-proyecto-individual-isa-encoder-riscv.pdf)
+[2] J. González Gómez, “Proyecto Individual: Codificador Educativo de Instrucciones RISC-V,” especificación de proyecto, CE-4301 Arquitectura de Computadores I, Instituto Tecnológico de Costa Rica, 2026. [En línea].
