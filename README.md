@@ -21,13 +21,13 @@ cd Arqui1-Proyecto1-RISCV-Encoder
 
 ## Ejecución
 
-La primera vez, se concede permiso de ejecución al archivo `run.sh`:
+La primera vez, concede permiso de ejecución al archivo `run.sh`:
 
 ```bash
 chmod +x run.sh
 ```
 
-Luego se puede pasar una instrucción completa como un único argumento entre comillas, según el formato indicado:
+Luego pasa una instrucción completa como un único argumento entre comillas:
 
 ```bash
 ./run.sh "add x5, x6, x7"
@@ -46,7 +46,6 @@ La última línea de una ejecución correcta tiene este formato:
 ```text
 HEX: 0xXXXXXXXX
 ```
-
 
 ## Documentación
 
