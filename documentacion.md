@@ -91,7 +91,9 @@ Arqui1-Proyecto1-RISCV-Encoder/
 ├── tests/
 │   └── validate_against_toolchain.py
 ├── docs/
+│   ├── diagrama1.dot
 │   └── img/
+│       ├── diagrama1.png
 │       └── ss1.png ... ss8.png
 └── isa-encoder-riscv-kit-2026ii/
     ├── README.md
@@ -99,14 +101,15 @@ Arqui1-Proyecto1-RISCV-Encoder/
 ```
 
 
-- `README.md`: explica cómo preparar, ejecutar y validar el programa.
+- `README.md`: explica cómo preparar y ejecutar el programa y enlaza esta documentación.
 - `documentacion.md`: contiene la explicación técnica y las evidencias del proyecto.
 - `encoder_skeleton.py`: contiene el parser, las tablas de instrucciones, la codificación y la explicación visual.
 - `run.sh`: punto de entrada requerido para ejecutar el programa.
 - `vectores_ejemplo.txt`: contiene los ejemplos iniciales proporcionados con el kit del proyecto.
 - `validacion_resultados.md`: contiene la comparación de los 36 casos contra el toolchain oficial.
 - `tests/validate_against_toolchain.py`: compara el encoder con las herramientas oficiales de RISC-V.
-- `docs/img/`: contiene las capturas `ss1.png` a `ss8.png` utilizadas en esta documentación.
+- `docs/diagrama1.dot`: contiene el código Graphviz del flujo principal.
+- `docs/img/`: contiene el diagrama generado y las capturas utilizadas en esta documentación.
 - `isa-encoder-riscv-kit-2026ii/`: conserva la especificación y la documentación original del kit.
 
 ## Arquitectura del programa
@@ -118,23 +121,38 @@ Al inicio se encuentran las tablas de instrucciones. En ellas se guardan los val
 Después aparecen las funciones auxiliares que procesan la entrada:
 
 - `_split_instruction()` separa el mnemónico de los operandos.
+- `_parse_instruction()` reconoce la forma de la instrucción y devuelve sus operandos ya validados.
 - `_parse_register()` convierte un registro como `x5` al número `5` y revisa que esté entre `x0` y `x31`.
 - `_parse_immediate()` valida los inmediatos de 12 bits.
 - `_parse_branch_offset()` valida los desplazamientos de los saltos y comprueba que sean pares.
 - `_parse_memory_operand()` separa expresiones como `8(x6)` en desplazamiento y registro base.
+- `_to_binary()` convierte cada valor al ancho binario que le corresponde.
 
-La codificación se hace en funciones distintas para R, I, S y B. Decidí separar las instrucciones I aritméticas de las cargas porque, aunque usan el mismo formato de bits, su sintaxis no es igual. Por ejemplo, `addi` recibe tres operandos separados, mientras que `lw` utiliza la forma `desplazamiento(registro)`.
+El análisis de operandos se concentra en `_parse_instruction()`. Esta función distingue la sintaxis de cada categoría y produce los mismos nombres de campo que utilizará el codificador. Por ejemplo, `addi` recibe tres operandos separados, mientras que `lw` utiliza la forma `desplazamiento(registro)`; después de procesarlas, ambas quedan representadas mediante `rd`, `rs1` e `immediate`.
 
-`encode_instruction()` funciona como coordinador: reconoce el mnemónico y envía los operandos al codificador correspondiente. Cada codificador coloca los campos en su posición mediante desplazamientos de bits y luego los une con operaciones OR.
+La codificación se hace en una función por formato: `_encode_r()`, `_encode_i()`, `_encode_s()` y `_encode_b()`. Las instrucciones aritméticas y las cargas comparten `_encode_i()` porque, una vez procesados sus operandos, utilizan la misma distribución de bits.
+
+`encode_instruction()` funciona como coordinador: solicita los datos procesados y los envía al codificador correspondiente. Cada codificador convierte los valores a cadenas binarias del ancho requerido, los coloca en el orden definido por el formato y los concatena para formar la palabra de 32 bits.
 
 Por último, `explain_instruction()` vuelve a separar la palabra codificada para mostrar sus campos. La función `main()` recibe el argumento enviado desde `run.sh`, controla los posibles errores e imprime la explicación, el binario y la línea `HEX`.
 
 En resumen, el recorrido de una instrucción es:
 
-```text
-run.sh -> main() -> encode_instruction() -> codificador del formato
-       -> explain_instruction() -> salida BIN y HEX
-```
+![Diagrama de flujo del codificador](docs/img/diagrama1.png)
+
+*Figura 3. Recorrido de una instrucción desde `run.sh` hasta la salida binaria y hexadecimal.*
+
+### Procedimiento de codificación
+
+La implementación sigue el mismo procedimiento que utilicé al codificar instrucciones manualmente:
+
+1. Se identifica el formato a partir del mnemónico.
+2. Se determina qué operando corresponde a `rd`, `rs1`, `rs2` o al inmediato.
+3. Los números de registro se convierten a binario mediante divisiones sucesivas entre 2 y se completan a 5 bits.
+4. El inmediato se convierte a 12 o 13 bits. Si es negativo, primero se suma `2^ancho` para obtener su representación en complemento a dos.
+5. En los formatos S y B se separan los bits del inmediato en las partes indicadas por el formato.
+6. Los campos se concatenan de izquierda a derecha para construir los 32 bits.
+7. La palabra se agrupa de cuatro bits en cuatro bits para facilitar su lectura en hexadecimal.
 
 ## Formatos de instrucción
 
@@ -145,9 +163,9 @@ La distribución de los campos se tomó de la tabla **RV32I Base Instruction Set
 - **S:** divide el inmediato entre `imm[11:5]` e `imm[4:0]`.
 - **B:** reparte el desplazamiento entre `imm[12]`, `imm[10:5]`, `imm[4:1]` e `imm[11]`; el bit cero no se almacena.
 
-En la salida, los campos aparecen desde el bit más significativo hasta el menos significativo. Cada línea indica el rango, el nombre del campo y su valor binario; los registros y los inmediatos también se muestran interpretados en decimal.
+En la salida, los campos aparecen desde el bit más significativo hasta el menos significativo. Cada línea indica el rango, el nombre del campo y su valor binario; después se muestra cómo se unen y cómo quedan agrupados para convertirlos a hexadecimal. Los registros y los inmediatos también se muestran interpretados en decimal.
 
-No es necesario mostrar la conversión interna del texto a un número entero, ya que es una tarea del parser. Cuando un inmediato es negativo, el codificador conserva sus 12 o 13 bits mediante una máscara, obteniendo así su representación en complemento a dos.
+El parser se limita a leer y validar los operandos. La codificación comienza cuando esos valores se convierten al binario del ancho correspondiente.
 
 ## Validación
 
@@ -155,7 +173,7 @@ La especificación solicita al menos tres casos distintos para cada una de las 1
 
 ![Requisito de validación contra herramientas oficiales](docs/img/ss3.png)
 
-*Figura 3. Cantidad y tipo de pruebas solicitadas para la validación [2].*
+*Figura 4. Cantidad y tipo de pruebas solicitadas para la validación [2].*
 
 El script ejecuta `run.sh`, ensambla el mismo caso para `rv32i`, obtiene la referencia con `objdump -d` y compara ambas palabras. Los 36 casos cubren registros comunes y extremos, inmediatos positivos y negativos y valores límite.
 
@@ -187,7 +205,7 @@ Los **36 casos coincidieron**. La comparación completa puede consultarse en [va
 
 ![Ejecución de una instrucción de formato R](docs/img/ss4.png)
 
-*Figura 4. Codificación y explicación de `add x5, x6, x7`.*
+*Figura 5. Codificación y explicación de `add x5, x6, x7`.*
 
 ### Formato I
 
@@ -197,7 +215,7 @@ Los **36 casos coincidieron**. La comparación completa puede consultarse en [va
 
 ![Ejecución de una instrucción de formato I](docs/img/ss5.png)
 
-*Figura 5. Codificación y explicación de `addi x10, x1, -12`.*
+*Figura 6. Codificación y explicación de `addi x10, x1, -12`.*
 
 ### Formato S
 
@@ -207,7 +225,7 @@ Los **36 casos coincidieron**. La comparación completa puede consultarse en [va
 
 ![Ejecución de una instrucción de formato S](docs/img/ss6.png)
 
-*Figura 6. Codificación y explicación de `sw x10, -12(x1)`.*
+*Figura 7. Codificación y explicación de `sw x10, -12(x1)`.*
 
 ### Formato B
 
@@ -217,7 +235,7 @@ Los **36 casos coincidieron**. La comparación completa puede consultarse en [va
 
 ![Ejecución de una instrucción de formato B](docs/img/ss7.png)
 
-*Figura 7. Codificación y explicación de `beq x5, x6, -4`.*
+*Figura 8. Codificación y explicación de `beq x5, x6, -4`.*
 
 ## Manejo de errores
 
@@ -231,7 +249,7 @@ El programa rechaza instrucciones no soportadas, registros fuera de `x0` a `x31`
 
 ![Ejemplos de entradas inválidas](docs/img/ss8.png)
 
-*Figura 8. Mensajes producidos al detectar diferentes errores de entrada.*
+*Figura 9. Mensajes producidos al detectar diferentes errores de entrada.*
 
 ## Fuentes consultadas
 
