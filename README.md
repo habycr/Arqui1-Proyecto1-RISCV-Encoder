@@ -21,13 +21,13 @@ cd Arqui1-Proyecto1-RISCV-Encoder
 
 ## Ejecución
 
-La primera vez, concede permiso de ejecución al archivo `run.sh`:
+La primera vez, se concede permiso de ejecución al archivo `run.sh`:
 
 ```bash
 chmod +x run.sh
 ```
 
-Luego pasa una instrucción completa como un único argumento entre comillas:
+Luego se puede pasar una instrucción completa como un único argumento entre comillas, según el formato indicado:
 
 ```bash
 ./run.sh "add x5, x6, x7"
@@ -47,25 +47,10 @@ La última línea de una ejecución correcta tiene este formato:
 HEX: 0xXXXXXXXX
 ```
 
-## Validación
-
-Para comparar el codificador con las herramientas oficiales de RISC-V se necesita GNU Binutils:
-
-```bash
-sudo apt update
-sudo apt install binutils-riscv64-unknown-elf
-```
-
-La validación completa se ejecuta con:
-
-```bash
-python3 tests/validate_against_toolchain.py \
-  --report validacion_resultados.md
-```
 
 ## Documentación
 
-La explicación de la arquitectura del programa, los formatos de instrucción, las pruebas, las capturas de ejecución y las fuentes consultadas se encuentra en [documentacion.md](documentacion.md).
+La explicación de la arquitectura del programa, los formatos de instrucción, la validación contra el toolchain oficial, las capturas de ejecución y las fuentes consultadas se encuentra en [documentacion.md](documentacion.md).
 
 ## Licencia
 

@@ -59,6 +59,23 @@ HEX: 0xXXXXXXXX
 
 Las instrucciones completas para preparar y ejecutar el proyecto se encuentran en el [README.md](README.md).
 
+## Requisitos y preparación
+
+Para ejecutar el codificador se necesita GNU/Linux, Bash y Python 3.10 o una versión posterior. No se requieren bibliotecas externas de Python.
+
+El archivo `run.sh` ya se encuentra marcado como ejecutable en el repositorio. Si el sistema pierde ese permiso al descargarlo, puede recuperarse con:
+
+```bash
+chmod +x run.sh
+```
+
+Para realizar la validación se utilizó GNU Binutils para RISC-V, que incluye el ensamblador, el enlazador y `objdump`. En Ubuntu puede instalarse con:
+
+```bash
+sudo apt update
+sudo apt install binutils-riscv64-unknown-elf
+```
+
 ## Estructura del proyecto
 
 ```text
@@ -127,6 +144,10 @@ La distribución de los campos se tomó de la tabla **RV32I Base Instruction Set
 - **I:** coloca un inmediato de 12 bits antes de `rs1`, `funct3`, `rd` y `opcode`.
 - **S:** divide el inmediato entre `imm[11:5]` e `imm[4:0]`.
 - **B:** reparte el desplazamiento entre `imm[12]`, `imm[10:5]`, `imm[4:1]` e `imm[11]`; el bit cero no se almacena.
+
+En la salida, los campos aparecen desde el bit más significativo hasta el menos significativo. Cada línea indica el rango, el nombre del campo y su valor binario; los registros y los inmediatos también se muestran interpretados en decimal.
+
+No es necesario mostrar la conversión interna del texto a un número entero, ya que es una tarea del parser. Cuando un inmediato es negativo, el codificador conserva sus 12 o 13 bits mediante una máscara, obteniendo así su representación en complemento a dos.
 
 ## Validación
 
